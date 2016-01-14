@@ -1,3 +1,7 @@
+> NOTE: I consider this deprecated in favour of the upcoming `fetch` standard.
+> See [github/fetch](https://github.com/github/fetch) (working implementation)
+> and the [standards proposal](https://fetch.spec.whatwg.org).
+
 ## Description
 
 `xhttp` is a lightweight ajax utility with pluggable ES6 promises, interceptors, and no mandatory dependencies. Think of it as `jQuery.ajax` without jQuery or `$http` without Angular. It's 12 KB minified with the optional `es6-promise` dependency.
@@ -24,21 +28,33 @@ The bower version uses the pre-built file that exposes the global `window.xhttp`
 
 ## Initialisation
 
-To get the default version, just require it:
+To get the default version, which will use the `es6-promise` shim, just require it:
 
 ```javascript
 var xhttp = require('xhttp')
 ```
 
-This will use an ES6 promise shim. You can also make your own version. Require `xhttp/custom` and call it with a custom promise constructor:
+If your target browsers support native Promises, or the `Promise`
+constructor is provided by a polyfill or other transformation, you
+can include the native version, instead:
 
 ```javascript
-var xhttp = require('xhttp/custom')(Promise)  // native or polyfill
+var xhttp = require('xhttp/native')
+```
+
+You can also make your own version. Require `xhttp/custom` and call it with a custom promise constructor:
+
+```javascript
 var xhttp = require('xhttp/custom')(require('q').Promise)
 var xhttp = require('xhttp/custom')(require('bluebird'))
 ```
 
 Any spec-compliant Promise implementation will do. This includes most popular promise libraries, so you don't have to worry about it.
+
+In ES6 (native or with the [Babel](https://babeljs.io/)) you can use:
+```javascript
+import xhttp from 'xhttp/native';
+```
 
 ## Usage
 
@@ -155,39 +171,47 @@ Set to `false` to disable automatic conversion of request body based on `options
 `xhttp` has three groups of interceptors:
 
 ``` javascript
-xhttp.reqInterceptors  -- applied to the `data` of each request
+xhttp.requestInterceptors   -- applied to the options of each request
 
-xhttp.resInterceptors  -- applied to each success response
+xhttp.responseInterceptors  -- applied to each success response
 
-xhttp.errInterceptors  -- applied to each failure response
+xhttp.errorInterceptors     -- applied to each failure response
 ```
 
-Request interceptors are called with `(data)`, where `data` is the data supplied in your options object.
+Request interceptors are called with `(options)`, where `options` is the
+configuration object passed by the user into the `xhttp()` call. Interceptors
+are allowed to mutate it (for instance, add `options.headers` or set a new
+`options.data` value). They can optionally return a new object to replace the
+config.
 
-Success and error interceptors are called with `(data, xhr)`, where `data` is the parsed body of the server response, and `xhr` is the native XMLHttpRequest object. When an interceptor returns a non-undefined value, it replaces the data. This allows to use interceptors as transformers.
+Success and error interceptors are called with `(data, xhr)`, where `data` is
+the parsed body of the server response, and `xhr` is the native XMLHttpRequest
+object. When an interceptor returns a non-undefined value, it replaces the data.
+This allows to use interceptors as transformers.
 
 Interceptors are applied in the same order as you add them.
 
-#### `xhttp.addReqInterceptor([... functions])`
+#### `xhttp.interceptRequest(interceptor)`
 
-Adds a request interceptor or multiple.
+Adds a request interceptor function.
 
 Example:
 
 ``` javascript
-xhttp.addReqInterceptor(function (data) {
-  return _.compact(data)
+xhttp.interceptRequest(function (options) {
+  options.headers['my-header'] = 'blah'
+  return options  // optional; may be a new object
 })
 ```
 
-#### `xhttp.addResInterceptor([... functions])`
+#### `xhttp.interceptResponse(interceptor)`
 
-Adds a response interceptor or multiple.
+Adds a response interceptor.
 
 Example:
 
 ``` javascript
-xhttp.addResInterceptor(function (data, xhr) {
+xhttp.interceptResponse(function (data, xhr) {
   var msg = xhr.getResponseHeader('Easter-Egg')
   if (msg) {
     console.log('-- message from Santa:', msg)
@@ -197,14 +221,14 @@ xhttp.addResInterceptor(function (data, xhr) {
 })
 ```
 
-#### `xhttp.addErrInterceptor([... functions])`
+#### `xhttp.interceptError(interceptor)`
 
-Adds an error interceptor or multiple.
+Adds an error interceptor.
 
 Example:
 
 ``` javascript
-xhttp.addErrInterceptor(function (data, xhr) {
+xhttp.interceptError(function (data, xhr) {
   console.error(data)
   alert('Debug your flops')
   // returning `undefined` → no change in data
